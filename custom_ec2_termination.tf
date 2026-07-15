@@ -1,9 +1,5 @@
-# Custom EC2 termination policy, mirroring the pattern used in the company's
-# jenkins-nodes ASGs: AWS Auto Scaling invokes this Lambda at scale-in
-# *selection* time and only terminates instances it returns. The function
-# filters out any instance still running ECS tasks, so busy instances are
-# never offered as termination candidates in the first place - unlike the
-# ASG's default termination policy, which is not ECS-task-aware.
+# Custom ASG termination policy: filters scale-in candidates to instances
+# with no running ECS tasks.
 data "aws_caller_identity" "current" {}
 
 data "archive_file" "custom_ec2_termination" {

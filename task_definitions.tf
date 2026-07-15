@@ -27,10 +27,7 @@ resource "aws_ecs_task_definition" "hello_world" {
   ])
 }
 
-# Long-running task used to observe ECS managed termination (scale-in)
-# protection: unlike hello-world (exits in under a second), this stays
-# RUNNING long enough to pin to a specific instance and watch protection
-# engage/lift around it during a scale-in experiment.
+# Long-running task for observing scale-in protection in action.
 resource "aws_ecs_task_definition" "scale_in_protection_demo" {
   family                   = "scale-in-protection-demo"
   network_mode             = "bridge"

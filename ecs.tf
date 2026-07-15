@@ -29,20 +29,9 @@ resource "aws_autoscaling_group" "ecs_instances" {
   health_check_type         = "EC2"
   health_check_grace_period = 0
 
-  # ECS's CreateCapacityProvider API requires the ASG to already have
-  # NewInstancesProtectedFromScaleIn enabled at creation time when
-  # managed_termination_protection is ENABLED - a create-time-only check.
-  # Company's ASG declares this false, but only after its capacity provider
-  # already existed (an in-place ASG update doesn't re-trigger that check);
-  # a from-scratch `tofu apply` that creates both in one pass needs `true`
-  # here. This only sets the default for newly launched instances - it
-  # doesn't re-assert protection onto already-running ones on each apply,
-  # so it doesn't fight ECS's own dynamic per-instance control.
+  # Required true at creation time for managed_termination_protection.
   protect_from_scale_in = true
-
-  # Selection happens in the Lambda before termination is attempted: only
-  # instances with no RUNNING ECS tasks are ever offered as candidates.
-  termination_policies = [aws_lambda_function.custom_ec2_termination.arn]
+  termination_policies  = [aws_lambda_function.custom_ec2_termination.arn]
 
   launch_template {
     id      = aws_launch_template.ecs_instances.id
