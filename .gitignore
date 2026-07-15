@@ -12,3 +12,4 @@ override.tf.json
 .terraformrc
 terraform.rc
 .idea/
+custom_ec2_termination/lambda.zip

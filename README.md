@@ -65,6 +65,22 @@ Terraform state using `import` blocks (see `import.tf`) rather than being recrea
 under new names. `tofu plan` should show zero create/update/destroy diffs beyond the
 import itself if the config still matches reality.
 
+## Custom EC2 termination policy
+
+The ASG's scale-in candidate selection is delegated to a Lambda
+(`custom_ec2_termination.tf` / `custom_ec2_termination/lambda_function.py`), mirroring
+the pattern used by the company's `jenkins-nodes` ASGs. AWS Auto Scaling invokes the
+Lambda at *selection* time and only ever terminates instances it returns; the function
+filters the ECS cluster's container instances down to those with zero `RUNNING` tasks,
+so a busy instance is never offered as a termination candidate in the first place. This
+is what makes scale-in reliably task-aware, unlike relying solely on ECS's own
+`managed_termination_protection` flag together with the ASG's default (non-ECS-aware)
+termination policy.
+
+`protect_from_scale_in = false` at the ASG level so ECS's managed termination
+protection remains the sole, dynamic owner of each instance's protection flag after
+launch, rather than competing with a static Terraform-declared default.
+
 ## Linting
 
 CI runs `tofu fmt`, `tofu init`, `tofu validate`, and `tflint` on every push/PR to `main`

@@ -12,3 +12,8 @@ output "capacity_provider_name" {
   description = "Name of the ECS capacity provider."
   value       = aws_ecs_capacity_provider.this.name
 }
+
+output "custom_termination_lambda_arn" {
+  description = "ARN of the Lambda used as the ASG's custom termination policy."
+  value       = aws_lambda_function.custom_ec2_termination.arn
+}
