@@ -28,7 +28,15 @@ resource "aws_autoscaling_group" "ecs_instances" {
   vpc_zone_identifier       = data.aws_subnets.default.ids
   health_check_type         = "EC2"
   health_check_grace_period = 0
-  protect_from_scale_in     = true
+
+  # false so ECS's managed_termination_protection is the sole, dynamic owner
+  # of each instance's scale-in protection flag after launch - matches
+  # company convention (statsperform/devops-tf-module-jenkins-nodes#30).
+  protect_from_scale_in = false
+
+  # Selection happens in the Lambda before termination is attempted: only
+  # instances with no RUNNING ECS tasks are ever offered as candidates.
+  termination_policies = [aws_lambda_function.custom_ec2_termination.arn]
 
   launch_template {
     id      = aws_launch_template.ecs_instances.id
