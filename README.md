@@ -70,9 +70,11 @@ is what makes scale-in reliably task-aware, unlike relying solely on ECS's own
 `managed_termination_protection` flag together with the ASG's default (non-ECS-aware)
 termination policy.
 
-`protect_from_scale_in = false` at the ASG level so ECS's managed termination
-protection remains the sole, dynamic owner of each instance's protection flag after
-launch, rather than competing with a static Terraform-declared default.
+`protect_from_scale_in = true` at the ASG level: `CreateCapacityProvider` requires this
+at creation time when `managed_termination_protection` is `ENABLED`, since both
+resources are created together in one `tofu apply` here. This only seeds the default
+for newly launched instances - ECS's managed termination protection still dynamically
+owns each running instance's actual protection flag afterward.
 
 ## Linting
 
