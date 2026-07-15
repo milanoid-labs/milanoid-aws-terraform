@@ -42,13 +42,6 @@ data "aws_iam_policy_document" "custom_ec2_termination" {
   }
 
   statement {
-    sid       = "AllowEC2Actions"
-    effect    = "Allow"
-    actions   = ["ec2:DescribeInstances"]
-    resources = ["*"]
-  }
-
-  statement {
     sid    = "AllowCloudWatchLogs"
     effect = "Allow"
     actions = [
