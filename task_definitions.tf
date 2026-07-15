@@ -37,7 +37,7 @@ resource "aws_ecs_task_definition" "scale_in_protection_demo" {
     {
       name      = "scale-in-protection-demo"
       image     = "public.ecr.aws/docker/library/busybox:latest"
-      command   = ["sleep", "1800"]
+      command   = ["sleep", "300"]
       cpu       = 128
       memory    = 128
       essential = true
