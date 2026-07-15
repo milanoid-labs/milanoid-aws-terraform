@@ -58,13 +58,6 @@ roughly $0.01/hour plus a small EBS gp3 charge. This account is outside the 12-m
 Free Tier window, so none of this is actually free - keep desired capacity at 0 between
 test sessions.
 
-## Adopted resources
-
-Every AWS resource here was originally created by hand via the CLI, then adopted into
-Terraform state using `import` blocks (see `import.tf`) rather than being recreated
-under new names. `tofu plan` should show zero create/update/destroy diffs beyond the
-import itself if the config still matches reality.
-
 ## Custom EC2 termination policy
 
 The ASG's scale-in candidate selection is delegated to a Lambda
