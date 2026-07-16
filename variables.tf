@@ -22,6 +22,12 @@ variable "desired_capacity" {
   default     = 0
 }
 
+variable "min_size" {
+  description = "Minimum size of the ASG. Defaults to 0. Set equal to desired_capacity to lock the ASG at a fixed size, e.g. to prevent ordinary capacity-based scale-in while testing max_instance_lifetime."
+  type        = number
+  default     = 0
+}
+
 variable "max_instance_lifetime" {
   description = "Maximum instance lifetime in seconds before ASG replaces the instance (0 = disabled). Default 1 day (lowest allowed non-zero value) for fast, cheap testing."
   type        = number
