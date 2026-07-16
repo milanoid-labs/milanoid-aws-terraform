@@ -12,7 +12,7 @@ resource "aws_ecs_task_definition" "hello_world" {
       name      = "hello-world"
       image     = "hello-world:latest"
       cpu       = 128
-      memory    = 128
+      memory    = 512
       essential = true
 
       logConfiguration = {
