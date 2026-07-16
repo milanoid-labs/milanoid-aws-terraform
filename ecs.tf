@@ -2,7 +2,7 @@ resource "aws_launch_template" "ecs_instances" {
   name = "milanoid-ecs-lt"
 
   image_id      = local.ecs_ami_id
-  instance_type = "t3.micro"
+  instance_type = "t3.nano"
   key_name      = data.aws_key_pair.ecs.key_name
 
   vpc_security_group_ids = [aws_security_group.ecs_instances.id]
