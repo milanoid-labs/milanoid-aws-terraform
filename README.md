@@ -76,6 +76,17 @@ resources are created together in one `tofu apply` here. This only seeds the def
 for newly launched instances - ECS's managed termination protection still dynamically
 owns each running instance's actual protection flag afterward.
 
+## Max instance lifetime
+
+`max_instance_lifetime` (default `86400`, i.e. 1 day - the lowest non-zero value AWS
+allows) proactively replaces an instance once it reaches that age, independent of task
+placement: the ASG launches a replacement first, then terminates the old instance
+through the normal scale-in path, so the custom termination Lambda and managed
+termination protection still apply. The company's `jenkins-nodes` ASGs use the same
+mechanism with a 1-week default; set to 1 day here to make age-based replacement cheap
+and fast to observe. AWS's actual allowed range is `0` (disabled) or `86400`-`31536000`
+seconds.
+
 ## Linting
 
 CI runs `tofu fmt`, `tofu init`, `tofu validate`, and `tflint` on every push/PR to `main`

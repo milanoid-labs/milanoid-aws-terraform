@@ -33,6 +33,9 @@ resource "aws_autoscaling_group" "ecs_instances" {
   protect_from_scale_in = true
   termination_policies  = [aws_lambda_function.custom_ec2_termination.arn]
 
+  # Default 1 day, for cheaply testing age-based instance replacement.
+  max_instance_lifetime = var.max_instance_lifetime
+
   launch_template {
     id      = aws_launch_template.ecs_instances.id
     version = "$Latest"

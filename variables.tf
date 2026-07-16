@@ -21,3 +21,14 @@ variable "desired_capacity" {
   type        = number
   default     = 0
 }
+
+variable "max_instance_lifetime" {
+  description = "Maximum instance lifetime in seconds before ASG replaces the instance (0 = disabled). Default 1 day (lowest allowed non-zero value) for fast, cheap testing."
+  type        = number
+  default     = 86400
+
+  validation {
+    condition     = var.max_instance_lifetime == 0 || (var.max_instance_lifetime >= 86400 && var.max_instance_lifetime <= 31536000)
+    error_message = "max_instance_lifetime must be 0 (disabled) or between 86400 (1 day) and 31536000 (365 days) seconds."
+  }
+}
