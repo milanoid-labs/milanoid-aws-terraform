@@ -21,7 +21,7 @@ resource "aws_launch_template" "ecs_instances" {
 resource "aws_autoscaling_group" "ecs_instances" {
   name = "milanoid-ecs-asg"
 
-  min_size         = 0
+  min_size         = var.min_size
   max_size         = 2
   desired_capacity = var.desired_capacity
 
