@@ -17,7 +17,7 @@ data "aws_key_pair" "ecs" {
 }
 
 data "aws_ssm_parameter" "ecs_optimized_ami" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended"
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended"
 }
 
 locals {
