@@ -101,6 +101,20 @@ tofu validate                  # checks config validity
 tflint                         # static analysis, see .tflint.hcl
 ```
 
+## Prometheus IAM user
+
+`iam_prometheus_user.tf` creates an IAM user (`prometheus-ec2-scraper`) with the
+AWS-managed `AmazonEC2ReadOnlyAccess` policy attached, for use by an external
+Prometheus instance's EC2 service discovery (`ec2_sd_config`). Terraform does not
+create an access key for this user, so no secret ever touches Terraform state. Create
+one manually after applying:
+
+```sh
+aws iam create-access-key --user-name prometheus-ec2-scraper
+```
+
+and hand the resulting key/secret to Prometheus out of band.
+
 ## State
 
 State is stored locally (`terraform.tfstate`, gitignored). Back it up before making
