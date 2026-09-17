@@ -17,3 +17,8 @@ output "custom_termination_lambda_arn" {
   description = "ARN of the Lambda used as the ASG's custom termination policy."
   value       = aws_lambda_function.custom_ec2_termination.arn
 }
+
+output "prometheus_iam_user_name" {
+  description = "Name of the IAM user for Prometheus EC2 scraping."
+  value       = aws_iam_user.prometheus.name
+}
