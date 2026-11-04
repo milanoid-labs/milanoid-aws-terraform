@@ -28,6 +28,26 @@ variable "min_size" {
   default     = 0
 }
 
+variable "github_repository" {
+  description = "GitHub repo (owner/name) the self-hosted runner registers against."
+  type        = string
+  default     = "milanoid-labs/milanoid-aws-terraform"
+}
+
+# One-time runner registration token (expires in 1 hour). Generate right
+# before apply: gh api repos/<github_repository>/actions/runners/registration-token -q .token
+variable "github_runner_registration_token" {
+  description = "GitHub Actions runner registration token. Must be generated within 1h before apply. Never committed."
+  type        = string
+  sensitive   = true
+}
+
+variable "runner_version" {
+  description = "actions/runner release to install (https://github.com/actions/runner/releases/latest)."
+  type        = string
+  default     = "2.338.2"
+}
+
 variable "max_instance_lifetime" {
   description = "Maximum instance lifetime in seconds before ASG replaces the instance (0 = disabled). Default 1 day (lowest allowed non-zero value) for fast, cheap testing."
   type        = number
