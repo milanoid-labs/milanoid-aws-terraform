@@ -22,3 +22,13 @@ output "prometheus_iam_user_name" {
   description = "Name of the IAM user for Prometheus EC2 scraping."
   value       = aws_iam_user.prometheus.name
 }
+
+output "graviton_playground_ecr_uri" {
+  description = "URI of the Graviton playground ECR repository."
+  value       = aws_ecr_repository.graviton_playground.repository_url
+}
+
+output "graviton_runner_instance_id" {
+  description = "Instance id of the Graviton runner (aws ssm start-session --target <id>)."
+  value       = aws_instance.graviton_runner.id
+}
