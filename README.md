@@ -115,6 +115,51 @@ aws iam create-access-key --user-name prometheus-ec2-scraper
 
 and hand the resulting key/secret to Prometheus out of band.
 
+## Graviton playground
+
+`graviton_ecr.tf` + `graviton_runner.tf` stand up one Graviton2 (arm64) `t4g.small`
+registered as a **self-hosted GitHub Actions runner** (label `graviton`) in this repo,
+plus an ECR repo `graviton-playground`. `.github/workflows/graviton-playground.yml`
+(`workflow_dispatch` only) builds a toy nginx image **natively on arm64** (no QEMU) and
+pushes it to ECR. The runner has no ingress and no SSH: shell access is
+`aws ssm start-session --target $(tofu output graviton_runner_instance_id)` (needs the
+Session Manager plugin). It authenticates to ECR via its IAM instance profile — no static
+keys.
+
+**Nothing here is free.** `t4g.small` is `$0.0192/hr` in `eu-central-1`, plus `$0.005/hr`
+public IPv4 and 12 GiB gp3 EBS: **~$0.60/day, ~$18/month if left running 24/7**. (The
+Free Tier for `t4g` applies only to accounts created on/after 2025-07-15; this account
+predates that.) ECR itself is nearly free: no per-repo charge, `$0.10/GB-month` storage,
+same-region push from the runner is free.
+
+Apply (the registration token expires in 1 hour, so generate and apply in one shot):
+
+```sh
+RUNNER_TOKEN=$(gh api repos/milanoid-labs/milanoid-aws-terraform/actions/runners/registration-token -q .token)
+tofu apply -var "github_runner_registration_token=$RUNNER_TOKEN"
+```
+
+If cloud-init logs "invalid or expired token" (`/var/log/cloud-init-output.log`), the
+instance booted but never registered — destroy and re-apply with a fresh token.
+
+Pause between sessions (stops compute+IPv4 billing; runner re-registers fine across
+reboots):
+
+```sh
+aws ec2 stop-instances --instance-ids $(tofu output graviton_runner_instance_id)
+```
+
+Full teardown (removes runner, SG, IAM and the ECR repo including all images):
+
+```sh
+tofu destroy
+```
+
+**Security note:** never add `pull_request` triggers to workflows running on this
+runner. Untrusted fork PRs executing on a long-lived runner that holds an IAM instance
+profile is a supply-chain attack path. `workflow_dispatch` (and later, carefully scoped
+`push` on `main`) only.
+
 ## State
 
 State is stored locally (`terraform.tfstate`, gitignored). Back it up before making
