@@ -1,0 +1,48 @@
+name: Graviton playground
+
+# Manual trigger only: this workflow runs ON the self-hosted runner, so we
+# never want it firing unattended. Never add `pull_request` triggers to
+# workflows using this runner - untrusted fork PRs on a long-lived runner
+# with an IAM instance profile is a supply-chain footgun.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm-image:
+    runs-on: graviton # label assigned in templates/graviton_runner_user_data.sh
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      # same pinned version as lint.yml (v6.0.3)
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Prove we are on Graviton
+        run: |
+          uname -m            # expect: aarch64
+          head -5 /proc/cpuinfo
+          docker version --format '{{.Server.Version}}'
+
+      - name: Log in to ECR
+        run: |
+          # Runner authenticates to AWS via its EC2 instance profile - no keys.
+          ECR_URI=$(aws ecr describe-repositories \
+            --repository-names graviton-playground \
+            --query repositories[0].repositoryUri --output text)
+          aws ecr get-login-password | docker login \
+            --username AWS --password-stdin "$ECR_URI"
+          echo "IMAGE=$ECR_URI:$IMAGE_TAG" >> "$GITHUB_ENV"
+        env:
+          AWS_DEFAULT_REGION: eu-central-1
+
+      - name: Build native arm64 image
+        working-directory: playground
+        run: docker build -t "$IMAGE" .
+
+      - name: Push to ECR
+        run: docker push "$IMAGE"
+
+      - name: Verify pushed manifest is arm64
+        run: docker buildx imagetools inspect "$IMAGE" | grep -i 'arm.*linux'
