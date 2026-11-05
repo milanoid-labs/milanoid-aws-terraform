@@ -32,3 +32,8 @@ output "graviton_runner_instance_id" {
   description = "Instance id of the Graviton runner (aws ssm start-session --target <id>)."
   value       = aws_instance.graviton_runner.id
 }
+
+output "graviton_runner_token_parameter" {
+  description = "SSM parameter the Graviton runner reads its registration token from on first boot."
+  value       = aws_ssm_parameter.graviton_runner_token.name
+}

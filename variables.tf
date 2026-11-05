@@ -28,22 +28,14 @@ variable "min_size" {
   default     = 0
 }
 
-variable "github_repository" {
-  description = "GitHub repo (owner/name) the self-hosted runner registers against."
+variable "github_registration_url" {
+  description = "GitHub URL the runner registers against: org URL shares the runner across all org repos (like the ARC runners); a repo URL scopes it to one repo. The registration token written to SSM must have the same scope. Changing this replaces the runner instance."
   type        = string
-  default     = "milanoid-labs/milanoid-aws-terraform"
-}
-
-# One-time runner registration token (expires in 1 hour). Generate right
-# before apply: gh api repos/<github_repository>/actions/runners/registration-token -q .token
-variable "github_runner_registration_token" {
-  description = "GitHub Actions runner registration token. Must be generated within 1h before apply. Never committed."
-  type        = string
-  sensitive   = true
+  default     = "https://github.com/milanoid-labs"
 }
 
 variable "runner_version" {
-  description = "actions/runner release to install (https://github.com/actions/runner/releases/latest)."
+  description = "actions/runner release to install (https://github.com/actions/runner/releases/latest). Changing this replaces the runner instance, so put a fresh registration token in SSM first."
   type        = string
   default     = "2.338.2"
 }

@@ -15,6 +15,7 @@ jobs:
     runs-on: graviton # label assigned in templates/graviton_runner_user_data.sh
     env:
       IMAGE_TAG: ${{ github.sha }}
+      AWS_DEFAULT_REGION: eu-central-1
     steps:
       # same pinned version as lint.yml (v6.0.3)
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -34,15 +35,30 @@ jobs:
           aws ecr get-login-password | docker login \
             --username AWS --password-stdin "$ECR_URI"
           echo "IMAGE=$ECR_URI:$IMAGE_TAG" >> "$GITHUB_ENV"
-        env:
-          AWS_DEFAULT_REGION: eu-central-1
 
       - name: Build native arm64 image
         working-directory: playground
         run: docker build -t "$IMAGE" .
 
+      - name: Verify built image is arm64
+        run: |
+          arch="$(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}')"
+          echo "local image platform: $arch"
+          test "$arch" = "linux/arm64"
+
       - name: Push to ECR
         run: docker push "$IMAGE"
 
-      - name: Verify pushed manifest is arm64
-        run: docker buildx imagetools inspect "$IMAGE" | grep -i 'arm.*linux'
+      - name: Verify registry holds exactly that image
+        run: |
+          # The previous step proved the local image is arm64; matching
+          # digests prove the registry stores that same manifest under the tag.
+          local_digest="$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}')"
+          local_digest="${local_digest#*@}"
+          remote_digest="$(aws ecr describe-images \
+            --repository-name graviton-playground \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          echo "local:  $local_digest"
+          echo "remote: $remote_digest"
+          test "$local_digest" = "$remote_digest"
