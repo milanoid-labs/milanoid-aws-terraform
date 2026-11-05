@@ -40,14 +40,25 @@ jobs:
         working-directory: playground
         run: docker build -t "$IMAGE" .
 
+      - name: Verify built image is arm64
+        run: |
+          arch="$(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}')"
+          echo "local image platform: $arch"
+          test "$arch" = "linux/arm64"
+
       - name: Push to ECR
         run: docker push "$IMAGE"
 
-      - name: Verify built image is arm64
+      - name: Verify registry holds exactly that image
         run: |
-          # AL2023's docker package ships no buildx plugin, so verify the
-          # local image manifest instead - the push step's exit code already
-          # proves the registry accepted it.
-          arch="$(docker image inspect "$IMAGE" --format '{{.Architecture}}')"
-          echo "image architecture: $arch"
-          test "$arch" = "arm64"
+          # The previous step proved the local image is arm64; matching
+          # digests prove the registry stores that same manifest under the tag.
+          local_digest="$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}')"
+          local_digest="${local_digest#*@}"
+          remote_digest="$(aws ecr describe-images \
+            --repository-name graviton-playground \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          echo "local:  $local_digest"
+          echo "remote: $remote_digest"
+          test "$local_digest" = "$remote_digest"

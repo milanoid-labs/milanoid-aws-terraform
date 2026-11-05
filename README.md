@@ -133,23 +133,36 @@ Free Tier for `t4g` applies only to accounts created on/after 2025-07-15; this a
 predates that.) ECR itself is nearly free: no per-repo charge, `$0.10/GB-month` storage,
 same-region push from the runner is free.
 
-Apply (the org-scoped registration token expires in 1 hour, so generate and apply in one
-shot; it is only needed for the **first** apply — `user_data` is in `ignore_changes`):
+The runner registration token never goes through Terraform (so it is not in state, in
+`user_data`, or in the cloud-init log). Terraform creates the SSM SecureString parameter
+`/graviton-runner/registration-token` with a `PENDING` placeholder. On first boot the
+instance waits up to 60 minutes for a real token there, reads it, resets the parameter
+to `PENDING`, and registers. Apply first, then hand over the token (it expires 1 hour
+after it is generated):
 
 ```sh
-RUNNER_TOKEN=$(gh api orgs/milanoid-labs/actions/runners/registration-token -q .token)
-tofu apply -var "github_runner_registration_token=$RUNNER_TOKEN"
+tofu apply
+aws ssm put-parameter --name /graviton-runner/registration-token \
+  --type SecureString --overwrite \
+  --value "$(gh api -X POST orgs/milanoid-labs/actions/runners/registration-token -q .token)"
 ```
 
-If cloud-init logs "invalid or expired token" (`/var/log/cloud-init-output.log`), the
-instance booted but never registered. Because `user_data` is ignored after creation,
-re-applying alone changes nothing — replace it deliberately with a fresh token:
+Routine applies of the rest of the stack need no token. Any change to the bootstrap
+(`runner_version`, `github_registration_url`, the template) shows up in the plan as a
+**replacement** of `aws_instance.graviton_runner`, because cloud-init only runs on first
+boot. The new AL2023 AMI is ignored until you replace the instance on purpose. For any
+re-registration (a failed one, an AMI roll, a version bump), put a fresh token in SSM
+**before** replacing:
 
 ```sh
-RUNNER_TOKEN=$(gh api orgs/milanoid-labs/actions/runners/registration-token -q .token)
-tofu apply -var "github_runner_registration_token=$RUNNER_TOKEN" \
-  -replace aws_instance.graviton_runner
+aws ssm put-parameter --name /graviton-runner/registration-token \
+  --type SecureString --overwrite \
+  --value "$(gh api -X POST orgs/milanoid-labs/actions/runners/registration-token -q .token)"
+tofu apply -replace aws_instance.graviton_runner
 ```
+
+Bootstrap progress and errors such as "invalid or expired token" are in
+`/var/log/cloud-init-output.log` on the instance.
 
 Pause between sessions (stops compute+IPv4 billing; runner re-registers fine across
 reboots):
@@ -164,13 +177,25 @@ Full teardown (removes runner, SG, IAM and the ECR repo including all images):
 tofu destroy
 ```
 
-**Security note:** this repo is **public** and the runner is long-lived, so anyone can
-open a PR that adds a workflow targeting the `graviton` label; if such a run is approved
-it executes on the runner with its IAM instance-profile permissions. Mitigations: enable
-the org setting that blocks self-hosted runners for fork PRs from users without write
-access (org Settings → Actions → General → Self-hosted runners), never add
-`pull_request` triggers to workflows on this runner, and prefer `workflow_dispatch`
-(and later, carefully scoped `push` on `main`) only.
+**Security note:** the runner is registered at **org scope**, and every repo in
+`milanoid-labs` except one is **public**. The org is on the Free plan, so only the
+`Default` runner group exists. It is visible to all org repos and already allows public
+repos, and it can't be limited to selected repos. Any workflow in any org repo that
+targets `runs-on: graviton` therefore runs on this long-lived runner, with its IAM
+instance profile (ECR push to `graviton-playground`) and a shared docker cache and
+`/opt/actions-runner` that persist between jobs. Mitigations:
+
+- Require approval for fork PR workflows from **all** outside contributors (the org
+  currently only requires it for first-time contributors):
+  `gh api -X PUT orgs/milanoid-labs/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors`
+  (or org Settings → Actions → General → "Approval for running fork pull request
+  workflows from contributors").
+- Never add `pull_request` / `pull_request_target` triggers to workflows on this runner.
+  Prefer `workflow_dispatch` (and later, carefully scoped `push` on `main`) only.
+- If that is not enough: register at repo scope instead
+  (`github_registration_url = "https://github.com/milanoid-labs/milanoid-aws-terraform"`
+  and a token from `gh api -X POST repos/milanoid-labs/milanoid-aws-terraform/actions/runners/registration-token`),
+  or make the repo private.
 
 ## State
 

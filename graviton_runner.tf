@@ -62,6 +62,7 @@ data "aws_iam_policy_document" "graviton_runner_ecr_push" {
     effect = "Allow"
     actions = [
       "ecr:DescribeRepositories", # the workflow resolves the repo URI with this
+      "ecr:DescribeImages",       # the workflow checks the pushed digest with this
       "ecr:BatchCheckLayerAvailability",
       "ecr:CompleteLayerUpload",
       "ecr:InitiateLayerUpload",
@@ -74,6 +75,25 @@ data "aws_iam_policy_document" "graviton_runner_ecr_push" {
   }
 }
 
+# The bootstrap reads the registration token from SSM and immediately resets
+# the parameter to the placeholder, so it can never be reused or read by a job
+# later. Scoped to this one parameter; the aws/ssm managed KMS key already
+# allows decrypt via SSM for principals in the account.
+data "aws_iam_policy_document" "graviton_runner_token" {
+  statement {
+    sid       = "ReadAndResetRegistrationToken"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:PutParameter"]
+    resources = [aws_ssm_parameter.graviton_runner_token.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "graviton_runner_token" {
+  name   = "graviton-runner-registration-token"
+  role   = aws_iam_role.graviton_runner.name
+  policy = data.aws_iam_policy_document.graviton_runner_token.json
+}
+
 resource "aws_iam_role_policy" "graviton_runner_ecr_push" {
   name   = "graviton-runner-ecr-push"
   role   = aws_iam_role.graviton_runner.name
@@ -83,6 +103,30 @@ resource "aws_iam_role_policy" "graviton_runner_ecr_push" {
 resource "aws_iam_instance_profile" "graviton_runner" {
   name = "graviton-runner"
   role = aws_iam_role.graviton_runner.name
+}
+
+# The short-lived runner registration token never passes through Terraform:
+# Terraform only creates this parameter with a placeholder, the operator writes
+# the real token with `aws ssm put-parameter` (see README), and the bootstrap
+# waits for it, consumes it and resets it to the placeholder. So the token is
+# never in tfstate, in user_data (readable from IMDS by any job), or in the
+# cloud-init log.
+locals {
+  graviton_runner_token_placeholder = "PENDING"
+}
+
+resource "aws_ssm_parameter" "graviton_runner_token" {
+  name        = "/graviton-runner/registration-token"
+  description = "GitHub runner registration token, consumed and reset by the graviton runner bootstrap."
+  type        = "SecureString"
+  value       = local.graviton_runner_token_placeholder
+
+  # Written out of band by the operator and reset by the instance.
+  lifecycle {
+    ignore_changes = [value]
+  }
+
+  tags = { Project = "graviton-playground" }
 }
 
 # Newest Amazon Linux 2023 arm64 AMI, resolved at plan time via SSM public
@@ -106,25 +150,29 @@ resource "aws_instance" "graviton_runner" {
     http_tokens   = "required" # IMDSv2 only
   }
 
+  # No secrets in here. Cloud-init only runs on first boot, so any change to
+  # the rendered script (runner_version, registration URL, bootstrap edits)
+  # replaces the instance instead of being silently ignored. Put a fresh token
+  # in SSM before applying such a change (README "Graviton playground").
   user_data = templatefile("${path.module}/templates/graviton_runner_user_data.sh", {
     runner_version          = var.runner_version
     github_registration_url = var.github_registration_url
-    runner_token            = var.github_runner_registration_token
+    aws_region              = var.aws_region
+    token_parameter_name    = aws_ssm_parameter.graviton_runner_token.name
+    token_placeholder       = local.graviton_runner_token_placeholder
   })
+  user_data_replace_on_change = true
 
   root_block_device {
     volume_type = "gp3"
     volume_size = 12 # AMI ships 8; 12 leaves room for docker layers without EBS surprises
   }
 
-  # Both inputs are moving targets: the AMI parameter tracks "latest" and
-  # user_data embeds a one-time registration token. Without this, an unrelated
-  # apply could force replacement and come back with a stale token, so the
-  # runner never re-registers. To re-register deliberately:
-  #   tofu apply -var github_runner_registration_token=... && \
-  #   tofu apply -replace aws_instance.graviton_runner
+  # The AMI parameter tracks "latest"; without this every new AL2023 release
+  # would replace the runner on an unrelated apply. Roll the AMI deliberately
+  # with `-replace aws_instance.graviton_runner`.
   lifecycle {
-    ignore_changes = [ami, user_data]
+    ignore_changes = [ami]
   }
 
   tags = { Project = "graviton-playground", Name = "graviton-runner" }

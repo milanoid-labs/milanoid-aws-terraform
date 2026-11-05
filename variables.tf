@@ -29,23 +29,13 @@ variable "min_size" {
 }
 
 variable "github_registration_url" {
-  description = "GitHub URL the runner registers against: org URL shares the runner across all org repos (like the ARC runners); a repo URL scopes it to one repo."
+  description = "GitHub URL the runner registers against: org URL shares the runner across all org repos (like the ARC runners); a repo URL scopes it to one repo. The registration token written to SSM must have the same scope. Changing this replaces the runner instance."
   type        = string
   default     = "https://github.com/milanoid-labs"
 }
 
-# One-time runner registration token (expires in 1 hour). Scope must match
-# github_registration_url. For the org default generate right before apply:
-#   gh api orgs/milanoid-labs/actions/runners/registration-token -q .token
-variable "github_runner_registration_token" {
-  description = "GitHub Actions runner registration token. Only consumed when the instance is (re)created - user_data is in ignore_changes, so routine applies do not need it. Must be generated within 1h. Never committed."
-  type        = string
-  default     = null
-  sensitive   = true
-}
-
 variable "runner_version" {
-  description = "actions/runner release to install (https://github.com/actions/runner/releases/latest)."
+  description = "actions/runner release to install (https://github.com/actions/runner/releases/latest). Changing this replaces the runner instance, so put a fresh registration token in SSM first."
   type        = string
   default     = "2.338.2"
 }
