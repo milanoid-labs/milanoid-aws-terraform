@@ -1,14 +1,17 @@
 #!/bin/bash
 # Cloud-init, runs ONCE on first boot of the graviton playground runner.
 # Rendered by Terraform templatefile(): the ONLY placeholders are
-# runner_version, github_repository, runner_token (written as dollar-brace
+# runner_version, github_registration_url, runner_token (written as dollar-brace
 # forms). If you add a bash brace-expansion of a shell variable, escape the
 # dollar sign by doubling it ($$ before the brace) or Terraform will try to
 # interpolate it.
 set -euxo pipefail
 
-# aws-cli: needed by the workflow to log in to ECR.
-dnf install -y docker aws-cli git
+# Runner is .NET-based: needs libicu on AL2023 or config.sh aborts.
+# AL2023 base AMI already ships AWS CLI v2; only install it if somehow absent
+# (the dnf name differs between AL2/AL2023, so never fail the bootstrap on it).
+dnf install -y docker git libicu
+command -v aws >/dev/null || dnf install -y aws-cli
 
 systemctl enable --now docker
 usermod -aG docker ec2-user
@@ -29,7 +32,7 @@ chown -R ec2-user:ec2-user "$RUNNER_HOME"
 # destroy it and re-apply with a freshly generated token.
 cd "$RUNNER_HOME"
 sudo -u ec2-user ./config.sh \
-  --url "https://github.com/${github_repository}" \
+  --url "${github_registration_url}" \
   --token "${runner_token}" \
   --labels graviton \
   --name "$INSTANCE_ID" \
@@ -37,5 +40,7 @@ sudo -u ec2-user ./config.sh \
   --unattended
 
 cd "$RUNNER_HOME"
-./svc.sh install
+# Must run as root WITH an explicit service user: under cloud-init SUDO_USER
+# is empty, so "svc.sh install" without a user installs the unit as root.
+./svc.sh install ec2-user
 ./svc.sh start

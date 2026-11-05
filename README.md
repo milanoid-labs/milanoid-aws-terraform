@@ -118,7 +118,8 @@ and hand the resulting key/secret to Prometheus out of band.
 ## Graviton playground
 
 `graviton_ecr.tf` + `graviton_runner.tf` stand up one Graviton2 (arm64) `t4g.small`
-registered as a **self-hosted GitHub Actions runner** (label `graviton`) in this repo,
+registered as a **self-hosted GitHub Actions runner** (label `graviton`) at **org scope**
+— like the homelab ARC runners it is shared across org repos, no per-repo registration.
 plus an ECR repo `graviton-playground`. `.github/workflows/graviton-playground.yml`
 (`workflow_dispatch` only) builds a toy nginx image **natively on arm64** (no QEMU) and
 pushes it to ECR. The runner has no ingress and no SSH: shell access is
@@ -132,15 +133,23 @@ Free Tier for `t4g` applies only to accounts created on/after 2025-07-15; this a
 predates that.) ECR itself is nearly free: no per-repo charge, `$0.10/GB-month` storage,
 same-region push from the runner is free.
 
-Apply (the registration token expires in 1 hour, so generate and apply in one shot):
+Apply (the org-scoped registration token expires in 1 hour, so generate and apply in one
+shot; it is only needed for the **first** apply — `user_data` is in `ignore_changes`):
 
 ```sh
-RUNNER_TOKEN=$(gh api repos/milanoid-labs/milanoid-aws-terraform/actions/runners/registration-token -q .token)
+RUNNER_TOKEN=$(gh api orgs/milanoid-labs/actions/runners/registration-token -q .token)
 tofu apply -var "github_runner_registration_token=$RUNNER_TOKEN"
 ```
 
 If cloud-init logs "invalid or expired token" (`/var/log/cloud-init-output.log`), the
-instance booted but never registered — destroy and re-apply with a fresh token.
+instance booted but never registered. Because `user_data` is ignored after creation,
+re-applying alone changes nothing — replace it deliberately with a fresh token:
+
+```sh
+RUNNER_TOKEN=$(gh api orgs/milanoid-labs/actions/runners/registration-token -q .token)
+tofu apply -var "github_runner_registration_token=$RUNNER_TOKEN" \
+  -replace aws_instance.graviton_runner
+```
 
 Pause between sessions (stops compute+IPv4 billing; runner re-registers fine across
 reboots):
@@ -155,10 +164,13 @@ Full teardown (removes runner, SG, IAM and the ECR repo including all images):
 tofu destroy
 ```
 
-**Security note:** never add `pull_request` triggers to workflows running on this
-runner. Untrusted fork PRs executing on a long-lived runner that holds an IAM instance
-profile is a supply-chain attack path. `workflow_dispatch` (and later, carefully scoped
-`push` on `main`) only.
+**Security note:** this repo is **public** and the runner is long-lived, so anyone can
+open a PR that adds a workflow targeting the `graviton` label; if such a run is approved
+it executes on the runner with its IAM instance-profile permissions. Mitigations: enable
+the org setting that blocks self-hosted runners for fork PRs from users without write
+access (org Settings → Actions → General → Self-hosted runners), never add
+`pull_request` triggers to workflows on this runner, and prefer `workflow_dispatch`
+(and later, carefully scoped `push` on `main`) only.
 
 ## State
 

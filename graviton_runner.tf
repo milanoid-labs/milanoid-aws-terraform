@@ -61,6 +61,7 @@ data "aws_iam_policy_document" "graviton_runner_ecr_push" {
     sid    = "PushPullPlaygroundRepo"
     effect = "Allow"
     actions = [
+      "ecr:DescribeRepositories", # the workflow resolves the repo URI with this
       "ecr:BatchCheckLayerAvailability",
       "ecr:CompleteLayerUpload",
       "ecr:InitiateLayerUpload",
@@ -92,8 +93,8 @@ data "aws_ssm_parameter" "al2023_arm64_ami" {
 
 resource "aws_instance" "graviton_runner" {
   ami                    = data.aws_ssm_parameter.al2023_arm64_ami.value
-  instance_type          = "t4g.small" # Graviton2 arm64, ~$0.0192/hr eu-central-1 - NOT free (account is outside Free Tier)
-  subnet_id              = data.aws_subnets.default.ids[0]
+  instance_type          = "t4g.small"                           # Graviton2 arm64, ~$0.0192/hr eu-central-1 - NOT free (account is outside Free Tier)
+  subnet_id              = sort(data.aws_subnets.default.ids)[0] # sorted: AWS gives no order guarantee, unsorted could force replacement
   vpc_security_group_ids = [aws_security_group.graviton_runner.id]
   iam_instance_profile   = aws_iam_instance_profile.graviton_runner.name
 
@@ -106,14 +107,24 @@ resource "aws_instance" "graviton_runner" {
   }
 
   user_data = templatefile("${path.module}/templates/graviton_runner_user_data.sh", {
-    runner_version    = var.runner_version
-    github_repository = var.github_repository
-    runner_token      = var.github_runner_registration_token
+    runner_version          = var.runner_version
+    github_registration_url = var.github_registration_url
+    runner_token            = var.github_runner_registration_token
   })
 
   root_block_device {
     volume_type = "gp3"
     volume_size = 12 # AMI ships 8; 12 leaves room for docker layers without EBS surprises
+  }
+
+  # Both inputs are moving targets: the AMI parameter tracks "latest" and
+  # user_data embeds a one-time registration token. Without this, an unrelated
+  # apply could force replacement and come back with a stale token, so the
+  # runner never re-registers. To re-register deliberately:
+  #   tofu apply -var github_runner_registration_token=... && \
+  #   tofu apply -replace aws_instance.graviton_runner
+  lifecycle {
+    ignore_changes = [ami, user_data]
   }
 
   tags = { Project = "graviton-playground", Name = "graviton-runner" }

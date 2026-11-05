@@ -15,6 +15,7 @@ jobs:
     runs-on: graviton # label assigned in templates/graviton_runner_user_data.sh
     env:
       IMAGE_TAG: ${{ github.sha }}
+      AWS_DEFAULT_REGION: eu-central-1
     steps:
       # same pinned version as lint.yml (v6.0.3)
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -34,8 +35,6 @@ jobs:
           aws ecr get-login-password | docker login \
             --username AWS --password-stdin "$ECR_URI"
           echo "IMAGE=$ECR_URI:$IMAGE_TAG" >> "$GITHUB_ENV"
-        env:
-          AWS_DEFAULT_REGION: eu-central-1
 
       - name: Build native arm64 image
         working-directory: playground
@@ -44,5 +43,11 @@ jobs:
       - name: Push to ECR
         run: docker push "$IMAGE"
 
-      - name: Verify pushed manifest is arm64
-        run: docker buildx imagetools inspect "$IMAGE" | grep -i 'arm.*linux'
+      - name: Verify built image is arm64
+        run: |
+          # AL2023's docker package ships no buildx plugin, so verify the
+          # local image manifest instead - the push step's exit code already
+          # proves the registry accepted it.
+          arch="$(docker image inspect "$IMAGE" --format '{{.Architecture}}')"
+          echo "image architecture: $arch"
+          test "$arch" = "arm64"
